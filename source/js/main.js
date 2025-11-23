@@ -778,6 +778,241 @@ document.addEventListener("DOMContentLoaded", function () {
     anzhiyu.addEventListenerPjax(window, "scroll", tocScrollFn, { passive: true });
   };
 
+  const handleEncryption = () => {
+    const $cardTocLayout = document.getElementById('card-toc');
+    if (!$cardTocLayout) return;
+    const $tocContent = $cardTocLayout.querySelector('.toc-content');
+    if (!$tocContent) return;
+    // 检查是否存在加密内容容器
+    const $encryptContainer = document.getElementById('hexo-blog-encrypt');
+    // 如果没有加密容器，说明不是加密文章，直接显示TOC
+    if (!$encryptContainer) {
+      console.log('No encryption container found, showing TOC');
+      $tocContent.style.display = 'block';
+      $tocContent.style.visibility = 'visible';
+      return;
+    }
+    // 检查是否处于加密状态的核心逻辑
+    const isCurrentlyEncrypted = () => {
+      if (!$encryptContainer) return false;
+
+      // 1. 检查加密容器中是否有密码输入相关的元素
+      const hasPasswordInput = $encryptContainer.querySelector('input[type="password"]') !== null;
+      const hasEncryptScript = $encryptContainer.querySelector('script[name="hbeData"]') !== null;
+      const hasEncryptButton = $encryptContainer.querySelector('.hbe-button') !== null;
+      // 2. 检查加密容器是否显示加密状态（包含密码输入框）
+      const isShowingEncryptForm = hasPasswordInput || hasEncryptScript;
+      // 3. 检查是否有"Encrypt again"按钮（表示已解密状态）
+      const hasHideButton = Array.from($encryptContainer.querySelectorAll('.hbe-button'))
+        .some(btn => btn.textContent.includes('Encrypt again'));
+      console.log('Encryption detection:', {
+        hasPasswordInput,
+        hasEncryptScript,
+        hasEncryptButton,
+        isShowingEncryptForm,
+        hasHideButton
+      });
+      // 如果显示加密表单，说明处于加密状态；如果有"Encrypt again"按钮，说明已解密
+      return isShowingEncryptForm && !hasHideButton;
+    };
+    // 重新初始化TOC功能
+    const reinitTocFunction = () => {
+      // 重新运行整个TOC初始化逻辑，因为解密后DOM发生了根本性变化
+      console.log('Reinitializing TOC after decryption...');
+
+      // 先移除旧的滚动监听器，如果存在的话
+      const scrollEventKey = 'toc-scroll';
+      anzhiyu.removeGlobalFnEvent(scrollEventKey);
+
+      // 重新运行TOC初始化
+      const isToc = GLOBAL_CONFIG_SITE.isToc;
+      const isAnchor = GLOBAL_CONFIG.isAnchor;
+      const $article = document.getElementById("article-container");
+
+      if (!($article && (isToc || isAnchor))) return;
+
+      let $tocLink, $cardToc, autoScrollToc, isExpand;
+      if (isToc) {
+        const $cardTocLayout = document.getElementById("card-toc");
+        $cardToc = $cardTocLayout.querySelector(".toc-content");
+        if (!$cardToc) return;
+
+        $tocLink = $cardToc.querySelectorAll(".toc-link");
+        isExpand = $cardToc.classList.contains("is-expand");
+
+        console.log('Found TOC elements:', $tocLink.length, 'links');
+
+        // toc元素點擊
+        const tocItemClickFn = e => {
+          const target = e.target.closest(".toc-link");
+          if (!target) return;
+
+          e.preventDefault();
+          anzhiyu.scrollToDest(
+            anzhiyu.getEleTop(document.getElementById(decodeURI(target.getAttribute("href")).replace("#", ""))) - 60,
+            300
+          );
+          if (window.innerWidth < 900) {
+            $cardTocLayout.classList.remove("open");
+          }
+        };
+
+        // 移除旧的点击监听器并添加新的
+        anzhiyu.removeGlobalFnEvent('toc-click');
+        anzhiyu.addEventListenerPjax($cardToc, "click", tocItemClickFn);
+
+        autoScrollToc = item => {
+          const activePosition = item.getBoundingClientRect().top;
+          const sidebarScrollTop = $cardToc.scrollTop;
+          if (activePosition > document.documentElement.clientHeight - 100) {
+            $cardToc.scrollTop = sidebarScrollTop + 150;
+          }
+          if (activePosition < 100) {
+            $cardToc.scrollTop = sidebarScrollTop - 150;
+          }
+        };
+
+        // find head position & add active class
+        const list = $article.querySelectorAll("h1,h2,h3,h4,h5,h6");
+        const filteredHeadings = Array.from(list).filter(heading => heading.id !== "CrawlerTitle");
+        let detectItem = "";
+
+        console.log('Found headings:', filteredHeadings.length, 'headings');
+
+        const findHeadPosition = function (top) {
+          if (top === 0) {
+            return false;
+          }
+
+          let currentId = "";
+          let currentIndex = "";
+
+          filteredHeadings.forEach(function (ele, index) {
+            if (top > anzhiyu.getEleTop(ele) - 80) {
+              const id = ele.id;
+              currentId = id ? "#" + encodeURI(id) : "";
+              currentIndex = index;
+            }
+          });
+          if (detectItem === currentIndex) return;
+          if (isAnchor) anzhiyu.updateAnchor(currentId);
+          detectItem = currentIndex;
+          if (isToc) {
+            $cardToc.querySelectorAll(".active").forEach(i => {
+              i.classList.remove("active");
+            });
+
+            if (currentId === "") {
+              return;
+            }
+            const currentActive = $tocLink[currentIndex];
+            if (currentActive) {
+              currentActive.classList.add("active");
+
+              setTimeout(() => {
+                autoScrollToc(currentActive);
+              }, 0);
+
+              if (isExpand) return;
+              let parent = currentActive.parentNode;
+
+              for (; !parent.matches(".toc"); parent = parent.parentNode) {
+                if (parent.matches("li")) parent.classList.add("active");
+              }
+            }
+          }
+        };
+
+        // main of scroll - 添加新的滚动监听器
+        const tocScrollFn = anzhiyu.throttle(() => {
+          const currentTop = window.scrollY || document.documentElement.scrollTop;
+          findHeadPosition(currentTop);
+        }, 100);
+
+        anzhiyu.addEventListenerPjax(window, "scroll", tocScrollFn, { passive: true });
+
+        // 立即触发一次位置检查
+        setTimeout(() => {
+          const currentTop = window.scrollY || document.documentElement.scrollTop;
+          findHeadPosition(currentTop);
+          console.log('TOC: Initial position check completed');
+        }, 100);
+
+        console.log('TOC functionality fully reinitialized');
+      }
+    };
+
+    // 更新TOC显示状态
+    const updateTocVisibility = () => {
+      const encrypted = isCurrentlyEncrypted();
+      if (encrypted) {
+        $tocContent.style.display = 'none';
+        $tocContent.style.visibility = 'hidden';
+        console.log('TOC: Hidden (encrypted)');
+      } else {
+        // 确保TOC具有正确的CSS类和样式
+        $tocContent.classList.remove('toc-div-class'); // 移除可能存在的错误类
+        $tocContent.classList.add('is-expand'); // 确保有正确的展开类
+
+        // 重置所有内联样式，让CSS样式表正常工作
+        $tocContent.style.cssText = '';
+        $tocContent.style.display = 'block';
+        $tocContent.style.visibility = 'visible';
+
+        console.log('TOC: Shown (decrypted) with proper classes');
+
+        // 重新初始化TOC功能
+        setTimeout(() => {
+          reinitTocFunction();
+        }, 100);
+      }
+    };
+    // 处理解密完成事件
+    const handleDecryptEvent = () => {
+      setTimeout(() => {
+        console.log('Decrypt event received, checking TOC visibility');
+        updateTocVisibility();
+      }, 300); // 给解密过程足够时间完成
+    };
+    // 初始化：延迟检查并设置TOC状态，确保DOM完全加载
+    setTimeout(updateTocVisibility, 100);
+    // 如果当前处于加密状态，设置监听器
+    if (isCurrentlyEncrypted()) {
+      console.log('Article is encrypted, setting up TOC hide listeners');
+      // 监听解密事件
+      window.addEventListener('hexo-blog-decrypt', handleDecryptEvent);
+      // 监听加密容器的DOM变化
+      const observer = new MutationObserver((mutations) => {
+        let shouldCheck = false;
+        for (const mutation of mutations) {
+          if (mutation.type === 'childList' || mutation.type === 'attributes') {
+            shouldCheck = true;
+            break;
+          }
+        }
+        if (shouldCheck) {
+          if (!isCurrentlyEncrypted()) {
+            console.log('Decryption detected via DOM changes');
+            updateTocVisibility();
+            observer.disconnect();
+            window.removeEventListener('hexo-blog-decrypt', handleDecryptEvent);
+          }
+        }
+      });
+      observer.observe($encryptContainer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'innerHTML']
+      });
+      // 60秒后自动清理
+      setTimeout(() => {
+        observer.disconnect();
+        window.removeEventListener('hexo-blog-decrypt', handleDecryptEvent);
+      }, 60000);
+    }
+  };
+
   const handleThemeChange = mode => {
     const globalFn = window.globalFn || {};
     const themeChange = globalFn.themeChange || {};
@@ -1792,6 +2027,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     GLOBAL_CONFIG.diytitle && changeDocumentTitle();
     scrollFnToDo();
+    handleEncryption();
     GLOBAL_CONFIG_SITE.isHome && scrollDownInIndex();
     addHighlightTool();
     GLOBAL_CONFIG.isPhotoFigcaption && addPhotoFigcaption();
