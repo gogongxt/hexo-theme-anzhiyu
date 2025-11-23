@@ -1,8 +1,6 @@
 script.
   (() => {
-    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
-    if ($mermaid.length === 0) return
-    const runMermaid = () => {
+    const runMermaid = ($mermaid) => {
       window.loadMermaid = true
       const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? '!{theme.mermaid.theme.dark}' : '!{theme.mermaid.theme.light}'
 
@@ -28,11 +26,47 @@ script.
       })
     }
 
-    const loadMermaid = () => {
-      window.loadMermaid ? runMermaid() : getScript('!{url_for(theme.asset.mermaid)}').then(runMermaid)
+    const codeToMermaid = () => {
+      const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+      if (codeMermaidEle.length === 0) return
+
+      codeMermaidEle.forEach(ele => {
+        const preEle = document.createElement('pre')
+        preEle.className = 'mermaid-src'
+        preEle.hidden = true
+        preEle.textContent = ele.textContent
+        const newEle = document.createElement('div')
+        newEle.className = 'mermaid-wrap'
+        newEle.appendChild(preEle)
+        ele.parentNode.replaceWith(newEle)
+      })
     }
 
-    anzhiyu.addGlobalFn('themeChange', runMermaid, 'mermaid')
+    const loadMermaid = () => {
+      // 处理 code.mermaid 元素转换
+      // 默认启用 code.mermaid 转换
+      codeToMermaid()
+
+      // 每次都重新查询DOM，支持动态内容
+      const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+      if ($mermaid.length === 0) return
+
+      const runMermaidFn = () => runMermaid($mermaid)
+      if (typeof anzhiyu !== 'undefined' && anzhiyu.addGlobalFn) {
+        anzhiyu.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+      }
+      window.loadMermaid ? runMermaidFn() : getScript('!{url_for(theme.asset.mermaid)}').then(runMermaidFn)
+    }
+
+    // 监听 hexo-blog-decrypt 事件，解密后重新渲染mermaid
+    window.addEventListener('hexo-blog-decrypt', loadMermaid)
+    // 注册到全局加密函数系统（如果有）
+    if (typeof anzhiyu !== 'undefined' && anzhiyu.addGlobalFn) {
+      anzhiyu.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+    }
+
+    // 监听 pjax 完成事件，重新初始化 mermaid
+    window.addEventListener('pjax:complete', loadMermaid)
 
     window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
   })()
