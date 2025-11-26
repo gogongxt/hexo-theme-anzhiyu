@@ -2,7 +2,8 @@
 - let gptName = theme.post_head_ai_description.gptName
 - let mode = theme.post_head_ai_description.mode
 - let switchBtn = theme.post_head_ai_description.switchBtn
-if (pageFillDescription && page.ai)
+// 对于加密文章，即使没有pageFillDescription也显示AI摘要，因为内容在解密后可以获取
+if (page.ai && theme.post_head_ai_description.enable)
   .post-ai-description
     .ai-title
       i.anzhiyufont.anzhiyu-icon-bilibili
