@@ -28,13 +28,13 @@
 
   let aiStr = "";
   let aiStrLength = "";
-  let delayInit = 600;
+  let delayInit = 50; // 减少初始延迟，立即开始显示
   let indexI = 0;
   let indexJ = 0;
   let timeouts = [];
   let elapsed = 0;
 
-  const observer = createIntersectionObserver();
+  // 移除延迟加载，立即开始显示
   const aiFunctions = [introduce, aiTitleRefreshIconClick, aiRecommend, aiGoHome];
 
   const aiBtnList = post_ai.querySelectorAll(".ai-btn-item");
@@ -121,27 +121,17 @@
   aiAbstract();
   showAiBtn();
 
-  function createIntersectionObserver() {
-    return new IntersectionObserver(
-      entries => {
-        let isVisible = entries[0].isIntersecting;
-        animationRunning = isVisible;
-        if (animationRunning) {
-          delayInit = indexI === 0 ? 200 : 20;
-          timeouts[1] = setTimeout(() => {
-            if (indexJ) {
-              indexI = 0;
-              indexJ = 0;
-            }
-            if (indexI === 0) {
-              explanation.innerHTML = aiStr.charAt(0);
-            }
-            requestAnimationFrame(animate);
-          }, delayInit);
-        }
-      },
-      { threshold: 0 }
-    );
+  // 移除延迟加载，立即显示函数
+  function startImmediateAnimation() {
+    if (indexJ) {
+      indexI = 0;
+      indexJ = 0;
+    }
+    if (indexI === 0) {
+      explanation.innerHTML = aiStr.charAt(0);
+    }
+    animationRunning = true;
+    requestAnimationFrame(animate);
   }
 
   function animate(timestamp) {
@@ -150,11 +140,13 @@
     }
     if (!animate.start) animate.start = timestamp;
     elapsed = timestamp - animate.start;
-    if (elapsed >= 20) {
+    // 加快打字机速度
+    if (elapsed >= 10) {
       animate.start = timestamp;
       if (indexI < aiStrLength - 1) {
         let char = aiStr.charAt(indexI + 1);
-        let delay = /[,.，。!?！？]/.test(char) ? 150 : 20;
+        // 调整标点符号延迟，从150ms减少到80ms
+        let delay = /[,.，。!?！？]/.test(char) ? 20 : 10;
         if (explanation.firstElementChild) {
           explanation.removeChild(explanation.firstElementChild);
         }
@@ -163,11 +155,11 @@
         div.className = "ai-cursor";
         explanation.appendChild(div);
         indexI++;
-        if (delay === 150) {
+        if (delay === 20) {
           post_ai.querySelector(".ai-explanation .ai-cursor").style.opacity = "0.2";
         }
         if (indexI === aiStrLength - 1) {
-          observer.disconnect();
+          // 移除observer.disconnect()，因为没有使用observer
           explanation.removeChild(explanation.firstElementChild);
         }
         timeouts[0] = setTimeout(() => {
@@ -195,11 +187,14 @@
     clearTimeouts();
     animationRunning = false;
     elapsed = 0;
-    observer.disconnect();
-    explanation.innerHTML = df ? "生成中. . ." : "请等待. . .";
+    // 修改初始化文本，更适合预生成摘要
+    explanation.innerHTML = df ? "准备显示摘要..." : "请稍候...";
     aiStr = str;
     aiStrLength = aiStr.length;
-    observer.observe(post_ai);
+    // 立即开始显示，不使用observer
+    setTimeout(() => {
+      startImmediateAnimation();
+    }, 100); // 很短的延迟后立即开始
   }
 
   async function aiAbstract(num = basicWordCount) {
@@ -216,7 +211,7 @@
     clearTimeouts();
     animationRunning = false;
     elapsed = 0;
-    observer.disconnect();
+    // 移除observer.disconnect()，因为没有使用observer
 
     num = Math.max(10, Math.min(2000, num));
     const options = {
@@ -293,9 +288,10 @@
     } else {
       startAI(strArr[0]);
     }
+    // 减少刷新图标显示延迟
     setTimeout(() => {
       aiTitleRefreshIcon.style.opacity = "1";
-    }, 600);
+    }, 200);
   }
 
   function aiRecommend() {
@@ -307,7 +303,7 @@
     explanation.innerHTML = "生成中. . .";
     aiStr = "";
     aiStrLength = "";
-    observer.disconnect();
+    // 移除observer.disconnect()，因为没有使用observer
     timeouts[2] = setTimeout(() => {
       explanation.innerHTML = recommendList();
     }, 600);
