@@ -127,9 +127,8 @@
       indexI = 0;
       indexJ = 0;
     }
-    if (indexI === 0) {
-      explanation.innerHTML = aiStr.charAt(0);
-    }
+    // 不显示初始字符，直接开始动画
+    explanation.innerHTML = "";
     animationRunning = true;
     requestAnimationFrame(animate);
   }
@@ -143,12 +142,13 @@
     // 加快打字机速度
     if (elapsed >= 10) {
       animate.start = timestamp;
-      if (indexI < aiStrLength - 1) {
-        let char = aiStr.charAt(indexI + 1);
+      if (indexI < aiStrLength) {
+        let char = aiStr.charAt(indexI);
         // 调整标点符号延迟，从150ms减少到80ms
         let delay = /[,.，。!?！？]/.test(char) ? 20 : 10;
-        if (explanation.firstElementChild) {
-          explanation.removeChild(explanation.firstElementChild);
+        // 先移除光标，再添加字符，最后添加光标（避免重复）
+        if (explanation.lastElementChild && explanation.lastElementChild.className === "ai-cursor") {
+          explanation.removeChild(explanation.lastElementChild);
         }
         explanation.innerHTML += char;
         let div = document.createElement("div");
@@ -156,15 +156,21 @@
         explanation.appendChild(div);
         indexI++;
         if (delay === 20) {
-          post_ai.querySelector(".ai-explanation .ai-cursor").style.opacity = "0.2";
+          let cursor = explanation.querySelector(".ai-cursor");
+          if (cursor) cursor.style.opacity = "0.2";
         }
-        if (indexI === aiStrLength - 1) {
+        if (indexI >= aiStrLength) {
           // 移除observer.disconnect()，因为没有使用observer
-          explanation.removeChild(explanation.firstElementChild);
+          let cursor = explanation.querySelector(".ai-cursor");
+          if (cursor) explanation.removeChild(cursor);
+          animationRunning = false;
+          return;
         }
         timeouts[0] = setTimeout(() => {
           requestAnimationFrame(animate);
         }, delay);
+      } else {
+        requestAnimationFrame(animate);
       }
     } else {
       requestAnimationFrame(animate);
@@ -187,14 +193,14 @@
     clearTimeouts();
     animationRunning = false;
     elapsed = 0;
-    // 修改初始化文本，更适合预生成摘要
-    explanation.innerHTML = df ? "准备显示摘要..." : "请稍候...";
+    // 不显示初始化文本，直接开始显示摘要内容
+    explanation.innerHTML = "";
     aiStr = str;
     aiStrLength = aiStr.length;
     // 立即开始显示，不使用observer
     setTimeout(() => {
       startImmediateAnimation();
-    }, 100); // 很短的延迟后立即开始
+    }, 50); // 极短的延迟确保DOM更新完成
   }
 
   async function aiAbstract(num = basicWordCount) {
@@ -320,11 +326,9 @@
       let list = "";
       for (let i = 0; i < thumbnail.length; i++) {
         const item = thumbnail[i];
-        list += `<div class="ai-recommend-item"><span class="index">${
-          i + 1
-        }：</span><a href="javascript:;" onclick="pjax.loadUrl('${item.href}')" title="${
-          item.title
-        }" data-pjax-state="">${item.title}</a></div>`;
+        list += `<div class="ai-recommend-item"><span class="index">${i + 1
+          }：</span><a href="javascript:;" onclick="pjax.loadUrl('${item.href}')" title="${item.title
+          }" data-pjax-state="">${item.title}</a></div>`;
       }
 
       return `很抱歉，无法找到类似的文章，你也可以看看本站最新发布的文章：<br /><div class="ai-recommend">${list}</div>`;
@@ -333,11 +337,9 @@
     let list = "";
     for (let i = 0; i < thumbnail.length; i++) {
       const item = thumbnail[i];
-      list += `<div class="ai-recommend-item"><span>推荐${
-        i + 1
-      }：</span><a href="javascript:;" onclick="pjax.loadUrl('${item.href}')" title="${
-        item.title
-      }" data-pjax-state="">${item.title}</a></div>`;
+      list += `<div class="ai-recommend-item"><span>推荐${i + 1
+        }：</span><a href="javascript:;" onclick="pjax.loadUrl('${item.href}')" title="${item.title
+        }" data-pjax-state="">${item.title}</a></div>`;
     }
 
     return `推荐文章：<br /><div class="ai-recommend">${list}</div>`;
