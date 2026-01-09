@@ -7,3 +7,6 @@ public/
 .deploy*/
 .deploy_git*/
 .idea
+.nvim/
+.specstory/
+CLAUDE.md
